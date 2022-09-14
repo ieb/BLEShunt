@@ -47,7 +47,11 @@ Byte 12 == \r
 Byte 13 == \n
 
 
+# PCB
 
+![Schematics](pcb/BLEBatteryMonitor.sch.svg)
+
+![Pcb](pcb/BLEBatteryMonitor-brd.svg)
 
 
 

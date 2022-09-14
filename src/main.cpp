@@ -5,6 +5,8 @@
 #include <avr/sleep.h>
 #include "commandline.h"
 #include "ina219.h"
+#include "ntcsensor.h"
+#include "jdy25m.h"
 
 
 // pins
@@ -17,16 +19,14 @@
 // JDY25M is on RX0/TX0 Serial
 // Debug header is on Serial1
 
-#define jdy25m Serial
+#define jdy25mUart Serial
 #define debug Serial1
-
-#define ATTINY3224_BOARD 1
-
-
-
 
 Ina219 ina219(&debug);
 CommandLine commandLine(&debug);
+NtcSensor ntcSensor(&debug);
+Jdy25m jdy25m(RESET_PIN, &jdy25mUart, &debug);
+
 
 unsigned long send = millis();
 // must be volatile so the compiler doesnt optimnise
@@ -39,14 +39,7 @@ uint8_t outputBuffer[OUTPUT_BUFFER_LEN];
 
 
 
-#ifdef PROMINI_BOARD
-void wakeUp() {
-   // Just a handler for the pin interrupt.
-}
-#endif
 
-
-#ifdef ATTINY3224_BOARD
 
 // see https://github.com/SpenceKonde/megaTinyCore/blob/e59fc3046dd69f951497506e8f441a6818c28be5/megaavr/extras/Ref_PinInterrupts.md
 // Used to detect wake up from sleep.
@@ -56,58 +49,6 @@ ISR(PORTA_PORT_vect) {
 	if (flags & (1 << 6) ) {
 		shouldWakeUp=true;
 		VPORTA.INTFLAGS |= (1 << 6); // clear the flag, so it doesnt fire continuously.
-	}
-}
-#endif
-
-/**
- *  Waits for the expected sequence of serial characters.
- */ 
-bool expect(const __FlashStringHelper * send, const char * expect, int timeout=1000) {
-	if ( send != NULL) {
-		if ( commandLine.diagnosticsEnabled ) {
-			debug.print(F(">"));
-			debug.println(send);
-			debug.print(F("<"));			
-		}
-		jdy25m.print(send);
-		jdy25m.print(F("\r\n"));
-	}
-	int i = 0;
-	int l = strlen(expect);
-	unsigned long end = millis()+timeout;
-	while(true) {
-		while (jdy25m.available()) {
-			char c = jdy25m.read();
-			if ( commandLine.diagnosticsEnabled ) {
-				debug.write(c);
-			}
-			if ( i < l ) {
-				if ( c == expect[i] ) {
-					i++;
-					continue;
-				}
-			} else if ( i == l ) {
-				if ( c == '\r') {
-					i++;
-					continue;
-				}
-			} else if ( i == l+1 ) {
-				if ( c == '\n' ) {
-					return true;
-				}
-			} 
-			i=0;
-			if ( c == expect[i]) {
-				i++;
-			}
-		}
-		if ( millis() > end ) {
-			debug.print(F("Failed to get :"));
-			debug.println(expect);
-			return false;
-		}
-		delay(100);
 	}
 }
 
@@ -152,14 +93,6 @@ void dumpBuffer() {
 	debug.println("");
 }
 
-void resetJdy25m() {
-   digitalWrite(RESET_PIN,LOW);
-   delay(100);
-   digitalWrite(RESET_PIN,HIGH);
-   // It takes about 1000ms for the JDY25M to startup and get to a sleep state.
-   // measured by experimentation.
-   delay(1000); 	
-}
 
 
 void setup() {
@@ -180,54 +113,19 @@ void setup() {
   }
   commandLine.begin();
 
+  ntcSensor.addSensor(TEMP_NTC1_PIN, 0);
+  ntcSensor.addSensor(TEMP_NTC2_PIN, 1);
+  ntcSensor.begin();
+
+  commandLine.diagnosticsEnabled =true;
 
   // These only work when the device is powered on or the RST 11 on device) pin is pulled low
   // reset the device.
-  resetJdy25m();
+  if ( !jdy25m.begin((const char *)&commandLine.deviceName[0]) ) {
+	  debug.print("Failed to find JDY25M board");
+	  jdy25mOk = false;
+  }
 
-  jdy25m.begin(115200);
-	debug.println(F("Connecting 115200"));
-  if ( !expect(F("AT+BAUD"),"+BAUD=8") ) {
-	  jdy25m.begin(9600);
-	  debug.println(F("Connecting 9600, and setting to 115200"));
-	  expect(F("AT+BAUD8"),"");
-	  jdy25m.begin(115200);
-	  resetJdy25m();
-	  expect(F("AT+BAUD"),"");
-	}
-
-	// clear the read buffer.
-	while(jdy25m.available())
-    	debug.write(jdy25m.read());
-
-
-
-	 // configure on first start
-    commandLine.diagnosticsEnabled =true;
-    jdy25m.print(F("AT+NAME"));
-    jdy25m.print(commandLine.deviceName);
-    jdy25m.print("\r\n");
-    debug.print(F("AT+NAME"));
-    debug.print(commandLine.deviceName);
-    debug.print("\n");
-	 jdy25mOk = expect(NULL,"OK");
-	 jdy25mOk = expect(F("AT+NAME"),commandLine.deviceName) && jdy25mOk;
-	 jdy25mOk = expect(NULL,"OK");	 
-	 jdy25mOk = expect(F("AT+VERSION"),"") && jdy25mOk;
-	 jdy25mOk = expect(F("AT+LADDR"),"") && jdy25mOk;
-	 jdy25mOk = expect(F("AT+ROLE"),"") && jdy25mOk;
-	 jdy25mOk = expect(F("AT+ROLE0"),"OK") && jdy25mOk; // transparent mode, which will notify 
-	 jdy25mOk = expect(F("AT+TYPE0"),"OK") && jdy25mOk; // nopassword connection mode
-	 jdy25mOk = expect(F("AT+STARTEN0"),"OK") && jdy25mOk; // enter light sleep. 
-	 jdy25mOk = expect(F("AT+ADVIN8"),"OK") && jdy25mOk; // 3s Broadcast, probably about 20uA
-	 jdy25mOk = expect(F("AT+RESET"),"+SLEEP", 3000) && jdy25mOk; // reset to enter sleep
- // this will cause the device to go to sleep until there is a connection
- // seen
- // OK
- // +JDY-25M-START
- // +SLEEP
- //expect("AT+SLEEP","");
- // should now be sleeping and advertising.
 	 if (ina219Ok && jdy25mOk ) {
 	 	 flashLed(2);
 	 } 
@@ -239,19 +137,13 @@ void setup() {
 
 	 }
 
-#ifdef ATTINY3224_BOARD
 	 set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 	 sleep_enable();
-#endif
 
 }
 
-int16_t readTemperature(int ch) {
-	return 204+ch*10; 
-}
 
-void loop() // run over and over
-{
+void loop() {
 	static unsigned long clKeepAlive = 60000;
 	static int state = 0;
 	unsigned long now = millis();
@@ -268,12 +160,14 @@ void loop() // run over and over
 	  }
 
 
-	  if (jdy25m.available())
-	    debug.write(jdy25m.read());
+	  jdy25m.echo();
 
 
 	  unsigned long now = millis();
 	  if ( now > send ) {
+			ina219.enableLogging(commandLine.diagnosticsEnabled);
+			ntcSensor.enableLogging(commandLine.diagnosticsEnabled);
+			jdy25m.enableLogging(commandLine.diagnosticsEnabled);
 	  	uint16_t error = 0x0000;
 	  	// read the ina219 and notify BLE.
 	  	send = now+1000;
@@ -289,8 +183,9 @@ void loop() // run over and over
   			error |= 0x0002;
   		}
   		// temperature 0.01C per bit, 320C max
-  		int16_t temp1 = readTemperature(0);
-  		int16_t temp2 = readTemperature(1);
+  		ntcSensor.refresh();
+  		int16_t temp1 = ntcSensor.getTemperature(0);
+  		int16_t temp2 = ntcSensor.getTemperature(1);
   		uint16_t tons = millis()/1000;
   		outputBuffer[0] = voltage>>8;
   		outputBuffer[1] = voltage&0xff;
@@ -304,9 +199,7 @@ void loop() // run over and over
   		outputBuffer[9] = tons&0xff;
   		outputBuffer[10] = error>>8;
   		outputBuffer[11] = error&0xff;
-  		jdy25m.write(outputBuffer,OUTPUT_BUFFER_LEN);
-  		jdy25m.write("\r\n");
-  		jdy25m.flush();
+  		jdy25m.notify(outputBuffer,OUTPUT_BUFFER_LEN);
   		if ( commandLine.diagnosticsEnabled ) {
   			debug.print(" v=");debug.print(voltage);
   			debug.print(" c=");debug.print(current);
@@ -322,12 +215,11 @@ void loop() // run over and over
 	} else {
 		delay(100); // to avoid bouncing
 		// clear the read buffer.
-		while(jdy25m.available())
-	    	debug.write(jdy25m.read());
 		// The JDY25 will go into sleep mode when the last connection is removed
 		// It will also take the WAKE PIN to low.
 		// turn off the ina219
 		ina219.powerDown(true);
+		jdy25m.powerDown(true);
 		// turn off anything else that can be.
 	  digitalWrite(LED_PIN, LOW);
 		debug.println(F("Sleeping "));
@@ -335,7 +227,6 @@ void loop() // run over and over
 		delay(100); // to avoid bouncing
 		// sleep
 
-#ifdef ATTINY3224_BOARD
 		shouldWakeUp = false;
 		USART0.CTRLB != 1<<4; // set the SFDEN bit, start of frame detection.
 		// clear the flag on pin6
@@ -352,23 +243,11 @@ void loop() // run over and over
 		// 0x1xxx == input pullup
 		PORTA.PIN6CTRL = 0b00001000;
 
-#endif
-#ifdef PROMINI_BOARD
-		attachInterrupt(digitalPinToInterrupt(WAKEUP_PIN), wakeUp, RISING);
-		// Enter power down state with ADC and BOD module disabled.
-   		// Wake up when wake up pin is low.
-   		LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
-   		// Disable external pin interrupt on wake up pin.
-		detachInterrupt(digitalPinToInterrupt(WAKEUP_PIN));
-#endif
 
 		debug.println(F("Woke up "));
 		debug.flush();
 		// clear the read buffer.
-		while(jdy25m.available())
-	    	debug.write(jdy25m.read());
-
-
+		jdy25m.powerDown(false);
 	  // restart ina219
 		ina219.powerDown(false);
 		delay(10); // to avoid bouncing

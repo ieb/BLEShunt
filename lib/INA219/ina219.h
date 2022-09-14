@@ -56,17 +56,22 @@ class Ina219 {
       Wire.begin();
       return powerDown(false);
     };
+    void enableLogging(bool enabled) {
+      this->loggingEnabled = enabled;
+    }
     float getVoltage() {
       int16_t raw = readRegister(INA219_REG_BUSVOLTAGE);
       if ( error == I2C_OK ) {
         int16_t value  = raw >> 3;
         float v =  0.001f * (int16_t)(value * 4);
-        debug->print("Voltage raw="); 
-        debug->print(raw,BIN); 
-        debug->print(" v="); 
-        debug->print(value, BIN); 
-        debug->print(" V="); 
-        debug->println(v,6);
+        if ( loggingEnabled ) {
+          debug->print("Voltage raw="); 
+          debug->print(raw,BIN); 
+          debug->print(" v="); 
+          debug->print(value, BIN); 
+          debug->print(" V="); 
+          debug->println(v,6);
+        }
         return v;
       } else {
         debug->print("I2C read voltage failed:");
@@ -90,12 +95,14 @@ class Ina219 {
 //          value = 0x9fff & value; // keep the sign bit, clear next 2.
 //        } 
         float c = 0.02604166667f * ((int16_t) value);
-        debug->print("Current  raw="); 
-        debug->print(raw); 
-        debug->print(" v="); 
-        debug->print(value); 
-        debug->print(" C="); 
-        debug->println(c,6);
+        if ( loggingEnabled ) {
+          debug->print("Current  raw="); 
+          debug->print(raw); 
+          debug->print(" v="); 
+          debug->print(value); 
+          debug->print(" C="); 
+          debug->println(c,6);
+        }
         return c;
 
       } else {
@@ -141,6 +148,7 @@ private:
   UartClass *debug;
   uint8_t error;
   int8_t address;
+  bool loggingEnabled = false;
 
   int16_t readRegister(int8_t r) {
       Wire.beginTransmission(address);
