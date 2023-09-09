@@ -28,7 +28,7 @@ NtcSensor ntcSensor(&debug);
 Jdy25m jdy25m(RESET_PIN, &jdy25mUart, &debug);
 
 
-unsigned long send = millis();
+unsigned long lastSend = millis();
 // must be volatile so the compiler doesnt optimnise
 volatile bool shouldWakeUp=false;
 bool ina219Ok = true;
@@ -144,7 +144,7 @@ void setup() {
 
 
 void loop() {
-	static unsigned long clKeepAlive = 60000;
+	static unsigned long last = 60000;
 	static int state = 0;
 	unsigned long now = millis();
 	if ( !(ina219Ok && jdy25mOk )) {
@@ -154,9 +154,9 @@ void loop() {
 	 	if ( !jdy25mOk) {
 	 		flashLed(5);
 	 	}
-	} else if ( now < clKeepAlive || digitalRead(WAKEUP_PIN) == HIGH ) {
+	} else if ( (now-last) > 60000 || digitalRead(WAKEUP_PIN) == HIGH ) {
 	  if ( commandLine.checkCommand() ) {
-	  	clKeepAlive = millis() + 60000;
+	  	last = millis();
 	  }
 
 
@@ -164,13 +164,13 @@ void loop() {
 
 
 	  unsigned long now = millis();
-	  if ( now > send ) {
+	  if ( (now-lastSend) > 1000 ) {
 			ina219.enableLogging(commandLine.diagnosticsEnabled);
 			ntcSensor.enableLogging(commandLine.diagnosticsEnabled);
 			jdy25m.enableLogging(commandLine.diagnosticsEnabled);
 	  	uint16_t error = 0x0000;
 	  	// read the ina219 and notify BLE.
-	  	send = now+1000;
+	  	lastSend = now;
 	  	digitalWrite(LED_PIN, CHANGE);
 	  	// 1mV per bit, +-32V max
   		int16_t voltage = (int16_t)(1000.0*ina219.getVoltage());
@@ -222,6 +222,7 @@ void loop() {
 		jdy25m.powerDown(true);
 		// turn off anything else that can be.
 	  digitalWrite(LED_PIN, LOW);
+		debug.print(millis());
 		debug.println(F("Sleeping "));
 		debug.flush();
 		delay(100); // to avoid bouncing
@@ -244,6 +245,7 @@ void loop() {
 		PORTA.PIN6CTRL = 0b00001000;
 
 
+		debug.print(millis());
 		debug.println(F("Woke up "));
 		debug.flush();
 		// clear the read buffer.

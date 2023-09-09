@@ -111,7 +111,7 @@ private:
         }
         int i = 0;
         int l = strlen(expect);
-        unsigned long end = millis()+timeout;
+        unsigned long start = millis();
         while(true) {
             while (port->available()) {
                 char c = port->read();
@@ -138,7 +138,7 @@ private:
                     i++;
                 }
             }
-            if ( millis() > end ) {
+            if ( (millis()-start) > timeout ) {
                 if ( logfails ) {
                     debug->print(F("Failed to get :"));
                     debug->println(expect);                    

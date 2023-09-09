@@ -223,7 +223,9 @@ F 3 "" H 8550 2100 30  0000 C CNN
 	0    1    1    0   
 $EndComp
 Wire Wire Line
-	5450 1500 6200 1500
+	5450 1500 5650 1500
+Wire Wire Line
+	5650 1500 6200 1500
 Wire Wire Line
 	5650 1550 5650 1500
 Connection ~ 5650 1500
@@ -326,14 +328,22 @@ $EndComp
 Wire Wire Line
 	4250 1850 4250 2000
 Wire Wire Line
-	4250 2000 3050 2000
+	4250 2000 3700 2000
+Wire Wire Line
+	3700 2000 3050 2000
 Wire Wire Line
 	3050 2000 3050 1850
 Wire Wire Line
-	3700 1600 3700 2100
+	3700 1600 3700 2000
+Wire Wire Line
+	3700 2000 3700 2100
 Connection ~ 3700 2000
 Wire Wire Line
-	2300 1300 3300 1300
+	2300 1300 3050 1300
+Wire Wire Line
+	3050 1300 3200 1300
+Wire Wire Line
+	3200 1300 3300 1300
 Wire Wire Line
 	3050 1300 3050 1450
 Wire Wire Line
@@ -342,7 +352,7 @@ Wire Wire Line
 	4250 1300 4250 1450
 Text GLabel 4250 1300 2    60   BiDi ~ 0
 3V
-Text GLabel 1700 1300 0    60   BiDi ~ 0
+Text GLabel 800  1300 0    60   BiDi ~ 0
 IN+
 Connection ~ 3050 1300
 $Comp
@@ -502,8 +512,6 @@ F 3 "" H 2050 1300 60  0000 C CNN
 	1    2050 1300
 	0    1    1    0   
 $EndComp
-Wire Wire Line
-	1700 1300 1800 1300
 $Comp
 L R R104
 U 1 1 631A35A4
@@ -542,4 +550,15 @@ Text Notes 4650 2700 0    60   ~ 0
 Wakeup is on an Async interrupt pin\nDo not move.
 Text Notes 650  6200 0    60   ~ 0
 https://github.com/SpenceKonde/megaTinyCore/blob/e59fc3046dd69f951497506e8f441a6818c28be5/megaavr/extras/PowerSave.md\n\nLDL117 has 250uA Iq and has input of 20V https://www.st.com/resource/en/datasheet/ldl1117.pdf\n
+$Comp
+L SPST SW?
+U 1 1 6322D892
+P 1300 1300
+F 0 "SW?" H 1300 1400 70  0000 C CNN
+F 1 "onoff" H 1300 1200 70  0000 C CNN
+F 2 "" H 1300 1300 60  0000 C CNN
+F 3 "" H 1300 1300 60  0000 C CNN
+	1    1300 1300
+	1    0    0    -1  
+$EndComp
 $EndSCHEMATC

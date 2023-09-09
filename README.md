@@ -58,8 +58,9 @@ Byte 13 == \n
 
 # Todo
 
-[ ] Implement temperature sensors
-[ ] calibrate
+* [x] Implement temperature sensors
+* [ ] Build temperature sensors
+* [ ] calibrate
 
 
 
